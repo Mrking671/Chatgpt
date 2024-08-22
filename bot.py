@@ -5,6 +5,7 @@ import requests
 
 # In-memory store for user tokens and verification status
 user_tokens = {}
+verification_times = {}
 
 # Replace with your API endpoint
 API_ENDPOINT = "https://chatgpt.darkhacker7301.workers.dev/?question="
@@ -14,8 +15,18 @@ BLOGSPOT_URL = "https://chatgptgiminiai.blogspot.com/2024/08/verification-page-p
 
 def start(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    token = f"{user_id}_{int(time.time())}"
+    current_time = int(time.time())
+    
+    # Check if the user needs to verify
+    if user_id in verification_times:
+        last_verified = verification_times[user_id]
+        if (current_time - last_verified) < 3600:  # 1 hour = 3600 seconds
+            update.message.reply_text("Please verify yourself first by clicking /start.")
+            return
+
+    token = f"{user_id}_{current_time}"
     user_tokens[token] = {"user_id": user_id, "verified": False}
+    verification_times[user_id] = current_time
 
     # Button to verify by visiting Blogspot
     verify_button = InlineKeyboardButton(
@@ -28,10 +39,10 @@ def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_text("Please verify by visiting the following page:", reply_markup=reply_markup)
 
 def verify(update: Update, context: CallbackContext) -> None:
-    # Extract token from the command
     token = context.args[0] if context.args else None
+    user_id = next((t["user_id"] for t in user_tokens.values() if t.get("token") == token), None)
 
-    if token in user_tokens:
+    if user_id and token in user_tokens:
         user_tokens[token]["verified"] = True
         update.message.reply_text("You have been verified! You can now use the bot.")
     else:
