@@ -1,65 +1,67 @@
+import time
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackContext
 import requests
-import logging
-from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+# In-memory store for user tokens and verification status
+user_tokens = {}
 
-# Your API endpoint
+# Replace with your API endpoint
 API_ENDPOINT = "https://chatgpt.darkhacker7301.workers.dev/?question="
 
-# Define the command /start
+# Replace with your Blogspot URL
+BLOGSPOT_URL = "https://chatgptgiminiai.blogspot.com/2024/08/verification-page-please-wait-for-30_22.html"
+
 def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text('Hi! I am your AI bot. Ask me anything!')
+    user_id = update.message.from_user.id
+    token = f"{user_id}_{int(time.time())}"
+    user_tokens[token] = {"user_id": user_id, "verified": False}
 
-# Handle messages
-def handle_message(update: Update, context: CallbackContext) -> None:
-    user_message = update.message.text
-    response = requests.get(API_ENDPOINT + user_message)
-    
-    if response.status_code == 200:
-        data = response.json()
-        answer = data.get('answer', 'Sorry, I could not process your request.')
-        join_link = data.get('join', '')
+    # Button to verify by visiting Blogspot
+    verify_button = InlineKeyboardButton(
+        "Verify by visiting the site",
+        url=f"{BLOGSPOT_URL}?token={token}"
+    )
+    keyboard = [[verify_button]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Send the response back to the user
-        update.message.reply_text(answer)
-        
-        if join_link:
-            update.message.reply_text(f"Join us here: {join_link}")
+    update.message.reply_text("Please verify by visiting the following page:", reply_markup=reply_markup)
+
+def verify(update: Update, context: CallbackContext) -> None:
+    # Extract token from the command
+    token = context.args[0] if context.args else None
+
+    if token in user_tokens:
+        user_tokens[token]["verified"] = True
+        update.message.reply_text("You have been verified! You can now use the bot.")
     else:
-        update.message.reply_text("Sorry, something went wrong. Please try again later.")
+        update.message.reply_text("Verification failed or incomplete. Please try again.")
 
-# Error handler
-def error(update: Update, context: CallbackContext) -> None:
-    logger.warning('Update "%s" caused error "%s"', update, context.error)
+def handle_message(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    token = next((t for t in user_tokens if user_tokens[t]["user_id"] == user_id), None)
+
+    if token and user_tokens[token]["verified"]:
+        # Send the user's message to the API
+        user_message = update.message.text
+        response = requests.get(f"{API_ENDPOINT}{user_message}").json()
+        answer = response.get("answer", "Sorry, something went wrong.")
+        update.message.reply_text(answer)
+    else:
+        update.message.reply_text("Please verify yourself first by clicking /start.")
 
 def main() -> None:
-    # Telegram bot token
     TOKEN = "7258041551:AAF81cY7a2kV72OUJLV3rMybTSJrj0Fm-fc"
-
-    # Create the Updater and pass it your bot's token
     updater = Updater(TOKEN)
 
-    # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
-    # On different commands - answer in Telegram
     dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("verify", verify))
+    dp.add_handler(CommandHandler("ask", handle_message))
+    dp.add_handler(CommandHandler("message", handle_message))
 
-    # On non-command i.e message - echo the message on Telegram
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-
-    # Log all errors
-    dp.add_error_handler(error)
-
-    # Start the Bot
     updater.start_polling()
-
-    # Run the bot until you press Ctrl-C or the process receives SIGINT, SIGTERM or SIGABRT
     updater.idle()
 
 if __name__ == '__main__':
