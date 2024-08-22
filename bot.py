@@ -1,99 +1,74 @@
-import time
 from flask import Flask, request, jsonify
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters, CallbackQueryHandler
+import logging
+import os
 import requests
 
-# In-memory store for user tokens and verification status
-user_tokens = {}
-verification_times = {}
+# Set up logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Replace with your API endpoint
-API_ENDPOINT = "https://chatgpt.darkhacker7301.workers.dev/?question="
-
-# Replace with your Blogspot URL
-BLOGSPOT_URL = "https://chatgptgiminiai.blogspot.com/2024/08/verification-page-please-wait-for-30_22.html"
-
-# Initialize Flask app
+# Flask app setup
 app = Flask(__name__)
 
-# Replace with your Telegram bot token
-TELEGRAM_TOKEN = "7258041551:AAF81cY7a2kV72OUJLV3rMybTSJrj0Fm-fc"
+# Bot setup
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+BLOGSPOT_URL = os.getenv('BLOGSPOT_URL')
+updater = Updater(token=TELEGRAM_TOKEN, use_context=True)
+dispatcher = updater.dispatcher
 
-# Initialize Application
-application = Application.builder().token(TELEGRAM_TOKEN).build()
+# User verification
+verified_users = {}
 
 def start(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    current_time = int(time.time())
-
-    # Check if the user needs to verify
-    if user_id in verification_times:
-        last_verified = verification_times[user_id]
-        if (current_time - last_verified) < 3600:  # 1 hour = 3600 seconds
-            update.message.reply_text("You have already verified recently. Please try again later.")
-            return
-
-    token = f"{user_id}_{current_time}"
-    user_tokens[token] = {"user_id": user_id, "verified": False}
-    verification_times[user_id] = current_time
-
-    # Button to verify by visiting Blogspot
-    verify_button = InlineKeyboardButton(
-        "Verify by visiting the site",
-        url=f"{BLOGSPOT_URL}?token={token}"
-    )
-    keyboard = [[verify_button]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    update.message.reply_text("Please verify by visiting the following page:", reply_markup=reply_markup)
+    if user_id not in verified_users or not verified_users[user_id]:
+        keyboard = [[{'text': 'Verify Now', 'callback_data': 'verify'}]]
+        reply_markup = {'inline_keyboard': keyboard}
+        update.message.reply_text(
+            'Please verify your access by clicking the button below:',
+            reply_markup=reply_markup
+        )
+    else:
+        update.message.reply_text("Welcome back! How can I assist you today?")
 
 def verify(update: Update, context: CallbackContext) -> None:
-    token = context.args[0] if context.args else None
-    if token and token in user_tokens:
-        user_id = user_tokens[token]["user_id"]
-        user_tokens[token]["verified"] = True
-        update.message.reply_text("You have been verified! You can now use the bot.")
-    else:
-        update.message.reply_text("Verification failed or incomplete. Please try again.")
+    query = update.callback_query
+    user_id = query.from_user.id
+    verified_users[user_id] = True
+    query.answer()
+    query.edit_message_text("Verification successful! You can now use the bot.")
+    query.message.reply_text(f"Please visit this link and wait for 30 seconds to complete the verification: {BLOGSPOT_URL}")
 
 def handle_message(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    # Check if the user is verified
-    token = next((t for t in user_tokens if user_tokens[t]["user_id"] == user_id), None)
-
-    if token and user_tokens[token]["verified"]:
-        # Send the user's message to the API
-        user_message = update.message.text
-        response = requests.get(f"{API_ENDPOINT}{user_message}").json()
-        answer = response.get("answer", "Sorry, something went wrong.")
+    if user_id in verified_users and verified_users[user_id]:
+        text = update.message.text
+        response = requests.get(f"https://chatgpt.darkhacker7301.workers.dev/?question={text}")
+        data = response.json()
+        answer = data.get('answer', 'Sorry, I could not understand your question.')
         update.message.reply_text(answer)
     else:
-        update.message.reply_text("Please verify yourself first by clicking /start.")
+        update.message.reply_text("Please verify your access first by clicking the button below:")
 
-def main() -> None:
-    dp = application.dispatcher
+# Handlers
+dispatcher.add_handler(CommandHandler('start', start))
+dispatcher.add_handler(CallbackQueryHandler(verify, pattern='^verify$'))
+dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("verify", verify))
-    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    application.run_polling()
-
-# Flask route to handle webhook requests from Telegram
-@app.route('/webhook', methods=['POST'])
+# Flask route for webhook
+@app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
     json_str = request.get_data(as_text=True)
-    update = Update.de_json(json_str, application.bot)
-    application.dispatcher.process_update(update)
+    update = Update.de_json(json_str, updater.bot)
+    dispatcher.process_update(update)
     return jsonify({'status': 'ok'})
 
-# Set the webhook URL (make sure to replace with your actual domain)
 def set_webhook():
-    webhook_url = "https://chatgpt-1-8qb8.onrender.com/webhook"
-    application.bot.set_webhook(url=webhook_url)
+    webhook_url = os.getenv('WEBHOOK_URL') + TELEGRAM_TOKEN
+    updater.bot.set_webhook(url=webhook_url)
 
 if __name__ == '__main__':
     set_webhook()
-    main()
-    app.run(host='0.0.0.0', port=80)  # Run Flask on port 80 for web app deployment
+    app.run(host='0.0.0.0', port=80)
