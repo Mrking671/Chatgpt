@@ -1,7 +1,7 @@
 import time
 from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, MessageHandler, Filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 import requests
 
 # In-memory store for user tokens and verification status
@@ -20,8 +20,8 @@ app = Flask(__name__)
 # Replace with your Telegram bot token
 TELEGRAM_TOKEN = "7258041551:AAF81cY7a2kV72OUJLV3rMybTSJrj0Fm-fc"
 
-# Initialize Updater globally
-updater = Updater(TELEGRAM_TOKEN)
+# Initialize Application
+application = Application.builder().token(TELEGRAM_TOKEN).build()
 
 def start(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
@@ -72,27 +72,26 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Please verify yourself first by clicking /start.")
 
 def main() -> None:
-    dp = updater.dispatcher
+    dp = application.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("verify", verify))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    dp.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 # Flask route to handle webhook requests from Telegram
 @app.route('/webhook', methods=['POST'])
 def webhook():
     json_str = request.get_data(as_text=True)
-    update = Update.de_json(json_str, updater.bot)
-    updater.dispatcher.process_update(update)
+    update = Update.de_json(json_str, application.bot)
+    application.dispatcher.process_update(update)
     return jsonify({'status': 'ok'})
 
 # Set the webhook URL (make sure to replace with your actual domain)
 def set_webhook():
     webhook_url = "https://chatgpt-1-8qb8.onrender.com/webhook"
-    updater.bot.set_webhook(url=webhook_url)
+    application.bot.set_webhook(url=webhook_url)
 
 if __name__ == '__main__':
     set_webhook()
