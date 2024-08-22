@@ -49,8 +49,9 @@ def verify(update: Update, context: CallbackContext) -> None:
 
 def handle_message(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
+    # Check if the user is verified
     token = next((t for t in user_tokens if user_tokens[t]["user_id"] == user_id), None)
-
+    
     if token and user_tokens[token]["verified"]:
         # Send the user's message to the API
         user_message = update.message.text
@@ -69,7 +70,7 @@ def main() -> None:
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("verify", verify))
     dp.add_handler(CommandHandler("ask", handle_message))
-    dp.add_handler(CommandHandler("message", handle_message))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
     updater.start_polling()
     updater.idle()
