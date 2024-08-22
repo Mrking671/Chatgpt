@@ -20,10 +20,13 @@ app = Flask(__name__)
 # Replace with your Telegram bot token
 TELEGRAM_TOKEN = "7258041551:AAF81cY7a2kV72OUJLV3rMybTSJrj0Fm-fc"
 
+# Initialize Updater globally
+updater = Updater(TELEGRAM_TOKEN)
+
 def start(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     current_time = int(time.time())
-    
+
     # Check if the user needs to verify
     if user_id in verification_times:
         last_verified = verification_times[user_id]
@@ -58,7 +61,7 @@ def handle_message(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     # Check if the user is verified
     token = next((t for t in user_tokens if user_tokens[t]["user_id"] == user_id), None)
-    
+
     if token and user_tokens[token]["verified"]:
         # Send the user's message to the API
         user_message = update.message.text
@@ -69,13 +72,10 @@ def handle_message(update: Update, context: CallbackContext) -> None:
         update.message.reply_text("Please verify yourself first by clicking /start.")
 
 def main() -> None:
-    updater = Updater(TELEGRAM_TOKEN)
-
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("verify", verify))
-    dp.add_handler(CommandHandler("ask", handle_message))
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
     updater.start_polling()
@@ -86,7 +86,7 @@ def main() -> None:
 def webhook():
     json_str = request.get_data(as_text=True)
     update = Update.de_json(json_str, updater.bot)
-    dispatcher.process_update(update)
+    updater.dispatcher.process_update(update)
     return jsonify({'status': 'ok'})
 
 # Set the webhook URL (make sure to replace with your actual domain)
