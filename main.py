@@ -39,7 +39,7 @@ def error(update: Update, context: CallbackContext) -> None:
 
 def main() -> None:
     # Telegram bot token
-    TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+    TOKEN = "7258041551:AAF81cY7a2kV72OUJLV3rMybTSJrj0Fm-fc"
 
     # Create the Updater and pass it your bot's token
     updater = Updater(TOKEN)
