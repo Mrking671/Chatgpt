@@ -21,7 +21,7 @@ def start(update: Update, context: CallbackContext) -> None:
     if user_id in verification_times:
         last_verified = verification_times[user_id]
         if (current_time - last_verified) < 3600:  # 1 hour = 3600 seconds
-            update.message.reply_text("Please verify yourself first by clicking /start.")
+            update.message.reply_text("You have already verified recently. Please try again later.")
             return
 
     token = f"{user_id}_{current_time}"
@@ -40,9 +40,8 @@ def start(update: Update, context: CallbackContext) -> None:
 
 def verify(update: Update, context: CallbackContext) -> None:
     token = context.args[0] if context.args else None
-    user_id = next((t["user_id"] for t in user_tokens.values() if t.get("token") == token), None)
-
-    if user_id and token in user_tokens:
+    if token and token in user_tokens:
+        user_id = user_tokens[token]["user_id"]
         user_tokens[token]["verified"] = True
         update.message.reply_text("You have been verified! You can now use the bot.")
     else:
