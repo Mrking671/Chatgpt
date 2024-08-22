@@ -91,7 +91,7 @@ def webhook():
 
 # Set the webhook URL (make sure to replace with your actual domain)
 def set_webhook():
-    webhook_url = "https://yourdomain.com/webhook"
+    webhook_url = "https://chatgpt-1-8qb8.onrender.com/webhook"
     updater.bot.set_webhook(url=webhook_url)
 
 if __name__ == '__main__':
